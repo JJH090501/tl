@@ -63,4 +63,26 @@ describe('macro body for-loop control variables', function()
       out = out:gsub("^%s+", ""):gsub("%s+$", "")
       assert.same("print('hi'); print('hi')", out)
    end)
+   it('handles a generic for with multiple control variables', function()
+      local code = [[
+         local macro pairs2!(x: Expression)
+            local out = block('statements')
+            for k, v in pairs({ a = 1, b = 2 }) do
+               k = k .. '!'
+               v = v + 10
+               table.insert(out, `$x`)
+            end
+            return out
+         end
+
+         pairs2!(print('hi'))
+      ]]
+      local ast, errs = tl.parse(code)
+      assert.same({}, errs)
+      local out, err = lua_generator.generate(ast, '5.4')
+      assert.is_nil(err)
+      out = out:gsub("^%s+", ""):gsub("%s+$", "")
+      assert.same("print('hi'); print('hi')", out)
+   end)
+
 end)
