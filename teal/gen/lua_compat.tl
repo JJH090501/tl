@@ -117,6 +117,25 @@ local bit_operators: {string:string} = {
    ["<<"] = "lshift",
 }
 
+-- shadow var function
+local function shadow_control_var(node: Node, control_var: string)
+   if #node.body == 0 then
+      return
+   end
+   local stmt = node_at(node, {
+      kind = "local_declaration",
+      vars = node_at(node, {
+         kind = "variable_list",
+         node_at(node, { kind = "variable", is_lvalue = true, tk = control_var }),
+      }),
+      exps = node_at(node, {
+         kind = "expression_list",
+         node_at(node, { kind = "variable", tk = control_var }),
+      }),
+   })
+   table.insert(node.body, 1, stmt)
+end
+
 local function adjust_code(ast: Node, needs_compat: {string:boolean}, gen_compat: GenCompat, gen_target: string)
    local visit = false
 
@@ -246,24 +265,15 @@ local function adjust_code(ast: Node, needs_compat: {string:boolean}, gen_compat
       visit = true
       visit_node.cbs["forin"] = {
          after = function(_: nil, node: Node, _children: {nil}): nil
-            if #node.body == 0 then
-               return
-            end
             if node.forin_modifies_control_var then
-               local control_var = node.vars[1].tk
-               local loc_at = node
-               local stmt = node_at(loc_at, {
-                  kind = "local_declaration",
-                  vars = node_at(loc_at, {
-                     kind = "variable_list",
-                     node_at(loc_at, { kind = "variable", is_lvalue = true, tk = control_var }),
-                  }),
-                  exps = node_at(loc_at, {
-                     kind = "expression_list",
-                     node_at(loc_at, { kind = "variable", tk = control_var }),
-                  }),
-               })
-               table.insert(node.body, 1, stmt)
+               shadow_control_var(node, node.vars[1].tk)
+            end
+         end,
+      }
+      visit_node.cbs["fornum"] = {
+         after = function(_: nil, node: Node, _children: {nil}): nil
+            if node.fornum_modifies_control_var then
+               shadow_control_var(node, node.var.tk)
             end
          end,
       }
