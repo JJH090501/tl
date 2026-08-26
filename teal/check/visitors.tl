@@ -1217,7 +1217,14 @@ visit_node.cbs = {
                                     or  "number"
          self:add_var(node.var, node.var.tk, a_type(node.var, typename, {}))
       end,
-      after = end_scope_and_none_type,
+      after = function(self: Context, node: Node, _children: {Type}): Type
+         local var = self:find_var(node.var.tk)
+         if var and var.has_been_written_to then
+            node.fornum_modifies_control_var = true
+         end
+         self:end_scope(node)
+         return NONE
+      end,
    },
    ["return"] = {
       before = function(self: Context, node: Node)

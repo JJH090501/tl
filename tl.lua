@@ -492,6 +492,7 @@ local parse_typeargs_if_any
 
 
 
+
 local ast = {}
 
 
@@ -8740,7 +8741,14 @@ visit_node.cbs = {
          "number"
          self:add_var(node.var, node.var.tk, a_type(node.var, typename, {}))
       end,
-      after = end_scope_and_none_type,
+      after = function(self, node, _children)
+         local var = self:find_var(node.var.tk)
+         if var and var.has_been_written_to then
+            node.fornum_modifies_control_var = true
+         end
+         self:end_scope(node)
+         return NONE
+      end,
    },
    ["return"] = {
       before = function(self, node)
@@ -11408,6 +11416,25 @@ local bit_operators = {
    ["<<"] = "lshift",
 }
 
+
+local function shadow_control_var(node, control_var)
+   if #node.body == 0 then
+      return
+   end
+   local stmt = node_at(node, {
+      kind = "local_declaration",
+      vars = node_at(node, {
+         kind = "variable_list",
+         node_at(node, { kind = "variable", is_lvalue = true, tk = control_var }),
+      }),
+      exps = node_at(node, {
+         kind = "expression_list",
+         node_at(node, { kind = "variable", tk = control_var }),
+      }),
+   })
+   table.insert(node.body, 1, stmt)
+end
+
 local function adjust_code(ast, needs_compat, gen_compat, gen_target)
    local visit = false
 
@@ -11537,24 +11564,15 @@ local function adjust_code(ast, needs_compat, gen_compat, gen_target)
       visit = true
       visit_node.cbs["forin"] = {
          after = function(_, node, _children)
-            if #node.body == 0 then
-               return
-            end
             if node.forin_modifies_control_var then
-               local control_var = node.vars[1].tk
-               local loc_at = node
-               local stmt = node_at(loc_at, {
-                  kind = "local_declaration",
-                  vars = node_at(loc_at, {
-                     kind = "variable_list",
-                     node_at(loc_at, { kind = "variable", is_lvalue = true, tk = control_var }),
-                  }),
-                  exps = node_at(loc_at, {
-                     kind = "expression_list",
-                     node_at(loc_at, { kind = "variable", tk = control_var }),
-                  }),
-               })
-               table.insert(node.body, 1, stmt)
+               shadow_control_var(node, node.vars[1].tk)
+            end
+         end,
+      }
+      visit_node.cbs["fornum"] = {
+         after = function(_, node, _children)
+            if node.fornum_modifies_control_var then
+               shadow_control_var(node, node.var.tk)
             end
          end,
       }

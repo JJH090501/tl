@@ -162,6 +162,7 @@ local record Node
    from: Node
    to: Node
    step: Node
+   fornum_modifies_control_var: boolean
 
    -- forin
    vars: Node
